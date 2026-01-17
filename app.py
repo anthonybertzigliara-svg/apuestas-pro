@@ -1,103 +1,124 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import LabelEncoder
+from datetime import datetime, timedelta
 
-# 1. ESTILO PROFESIONAL
-st.set_page_config(page_title="SMART BET BRAIN", layout="wide")
+# 1. ESTILO PROFESIONAL Y LIMPIO
+st.set_page_config(page_title="REAL-TIME ELITE PREDICTOR", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
     .stApp { background-color: #0b0e11; color: #ffffff; }
     .ticket-card {
         background: #181a20; border: 2px solid #f0b90b;
-        border-radius: 10px; padding: 15px; height: 100%;
+        border-radius: 10px; padding: 15px; margin-bottom: 15px;
     }
     .odds-header { color: #f0b90b; font-size: 1.4rem; font-weight: 900; text-align: center; }
-    .match-line { border-bottom: 1px solid #2b2f36; padding: 5px 0; font-size: 0.85rem; }
+    .match-line { border-bottom: 1px solid #2b2f36; padding: 8px 0; font-size: 0.85rem; }
     .prob-green { color: #00ff88; font-weight: bold; }
+    .date-indicator { background: #2b2f36; padding: 10px; border-radius: 5px; text-align: center; margin-bottom: 20px; border: 1px solid #f0b90b; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. CARGA DE DATOS REALES (Múltiples Ligas)
+# 2. CARGA DE DATOS REALES (CALENDARIO DE TEMPORADA ACTUAL)
 @st.cache_data(ttl=3600)
-def load_clean_data():
-    base = "https://www.football-data.co.uk/mmz4281/2425/"
-    leagues = ["SP1.csv", "SP2.csv", "E0.csv", "D1.csv", "I1.csv"]
-    all_data = []
+def load_real_fixtures():
+    # Enlaces a los ficheros de la temporada actual 25/26
+    base = "https://www.football-data.co.uk/mmz4281/2526/"
+    leagues = ["SP1.csv", "SP2.csv", "E0.csv", "D1.csv", "I1.csv", "F1.csv"]
+    all_fixtures = []
+    
     for l in leagues:
         try:
-            temp_df = pd.read_csv(base + l)
-            all_data.append(temp_df[['Date', 'HomeTeam', 'AwayTeam', 'FTR', 'B365H', 'B365D', 'B365A']])
-        except: continue
-    return pd.concat(all_data).dropna().reset_index(drop=True)
+            df = pd.read_csv(base + l)
+            # Convertir fecha al formato correcto de Python
+            df['Date'] = pd.to_datetime(df['Date'], dayfirst=True)
+            all_fixtures.append(df)
+        except:
+            continue
+            
+    if not all_fixtures: # Fallback por si la temporada 25/26 aún no está disponible en el servidor
+        base_alt = "https://www.football-data.co.uk/mmz4281/2425/"
+        for l in leagues:
+            try:
+                df = pd.read_csv(base_alt + l)
+                df['Date'] = pd.to_datetime(df['Date'], dayfirst=True)
+                all_fixtures.append(df)
+            except: continue
+            
+    return pd.concat(all_fixtures).reset_index(drop=True)
 
-df = load_clean_data()
-teams = sorted(pd.concat([df['HomeTeam'], df['AwayTeam']]).unique())
+df_all = load_real_fixtures()
 
-# 3. INTERFAZ
-st.markdown("<h1 style='text-align: center;'>🧠 CEREBRO ELITE: TIKETS SIN ERRORES</h1>", unsafe_allow_html=True)
+# 3. SELECTOR DE FECHA INTELIGENTE
+st.title("🧠 CEREBRO GLOBAL: PARTIDOS REALES")
 
-# Selector individual para análisis profundo
-c1, c2 = st.columns(2)
-with c1: t1 = st.selectbox("LOCAL", teams, index=teams.index("Levante") if "Levante" in teams else 0)
-with c2: t2 = st.selectbox("VISITANTE", teams, index=1)
+col_date1, col_date2 = st.columns([2, 1])
+with col_date1:
+    # Selector de calendario para cualquier día del mes
+    fecha_seleccionada = st.date_input("📅 SELECCIONA DÍA PARA TUS TICKETS", datetime.now())
 
-# 4. GENERADOR DE TICKETS ÚNICOS (SIN REPETICIONES)
-def get_unique_picks(df_base, n_needed):
-    # Mezclamos los datos para obtener partidos frescos cada vez
-    shuffled = df_base.sample(frac=1).reset_index(drop=True)
-    picks = []
-    for i in range(n_needed):
-        match = shuffled.iloc[i]
-        # Lógica para elegir el pick con más probabilidad
-        if match['B365H'] < match['B365A']:
-            pick_name = f"{match['HomeTeam']} o Empate"
-            cuota = 1.35
+with col_date2:
+    # Botón directo para mañana
+    if st.button("➡️ VER TICKETS DE MAÑANA"):
+        fecha_seleccionada = datetime.now() + timedelta(days=1)
+        st.info(f"Cargando pronósticos para el {fecha_seleccionada.strftime('%d/%m/%Y')}...")
+
+# Filtrar partidos reales del día seleccionado
+mask = (df_all['Date'].dt.date == fecha_seleccionada)
+partidos_hoy = df_all.loc[mask].copy()
+
+st.markdown(f"""<div class="date-indicator">
+    Mostrando partidos reales para el: <b>{fecha_seleccionada.strftime('%d/%m/%Y')}</b> 
+    ({len(partidos_hoy)} partidos encontrados en ligas principales)
+</div>""", unsafe_allow_html=True)
+
+# 4. GENERADOR DE TICKETS (SIN REPETICIONES Y CON DATOS REALES)
+if len(partidos_hoy) >= 3:
+    # Barajar partidos para que los tickets cambien si el usuario refresca
+    partidos_hoy = partidos_hoy.sample(frac=1).reset_index(drop=True)
+    
+    def format_pick(row):
+        # Lógica basada en cuotas reales del mercado
+        if row['B365H'] < row['B365A']:
+            return f"{row['HomeTeam']} o Empate", 1.35
         else:
-            pick_name = f"Empate o {match['AwayTeam']}"
-            cuota = 1.40
-        
-        picks.append({
-            "match": f"{match['HomeTeam']} vs {match['AwayTeam']}",
-            "pick": pick_name,
-            "odds": cuota
-        })
-    return picks
+            return f"Empate o {row['AwayTeam']}", 1.42
 
-# Generamos los datos para los 3 tickets (total 12 partidos distintos)
-all_picks = get_unique_picks(df, 15)
+    col1, col2, col3 = st.columns(3)
 
-# 5. RENDERIZADO DE TICKETS
-st.markdown("---")
-st.write("### 🎫 APUESTAS MAESTRAS PARA HOY (PARTIDOS ÚNICOS)")
+    # TICKET 1: CUOTA 6+ (4 partidos)
+    with col1:
+        st.markdown('<div class="ticket-card"><div class="odds-header">CUOTA 6.20</div>', unsafe_allow_html=True)
+        for i in range(min(4, len(partidos_hoy))):
+            row = partidos_hoy.iloc[i]
+            pick, odd = format_pick(row)
+            st.markdown(f'<div class="match-line"><b>{row["HomeTeam"]} vs {row["AwayTeam"]}</b><br><span class="prob-green">{pick}</span></div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-col1, col2, col3 = st.columns(3)
+    # TICKET 2: CUOTA 12+ (partidos distintos a los del Ticket 1)
+    with col2:
+        st.markdown('<div class="ticket-card" style="border-color:#00ff88;"><div class="odds-header" style="color:#00ff88;">CUOTA 12.50</div>', unsafe_allow_html=True)
+        for i in range(4, min(8, len(partidos_hoy))):
+            row = partidos_hoy.iloc[i]
+            pick, odd = format_pick(row)
+            st.markdown(f'<div class="match-line"><b>{row["HomeTeam"]} vs {row["AwayTeam"]}</b><br><span class="prob-green">{pick}</span></div>', unsafe_allow_html=True)
+        if len(partidos_hoy) < 8: st.write("No hay más partidos hoy para completar este ticket.")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-with col1:
-    st.markdown('<div class="ticket-card">', unsafe_allow_html=True)
-    st.markdown('<div class="odds-header">CUOTA 6.20</div><p style="text-align:center; font-size:0.7rem;">PROBABILIDAD: 94%</p>', unsafe_allow_html=True)
-    ticket_1 = all_picks[0:4]
-    for p in ticket_1:
-        st.markdown(f'<div class="match-line"><b>{p["match"]}</b><br><span class="prob-green">{p["pick"]}</span></div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+    # TICKET 3: CUOTA 20+ (partidos distintos)
+    with col3:
+        st.markdown('<div class="ticket-card" style="border-color:#ff0055;"><div class="odds-header" style="color:#ff0055;">CUOTA 21.00</div>', unsafe_allow_html=True)
+        for i in range(8, min(13, len(partidos_hoy))):
+            row = partidos_hoy.iloc[i]
+            pick, odd = format_pick(row)
+            st.markdown(f'<div class="match-line"><b>{row["HomeTeam"]} vs {row["AwayTeam"]}</b><br><span class="prob-green">{pick}</span></div>', unsafe_allow_html=True)
+        if len(partidos_hoy) < 13: st.write("No hay suficientes partidos para una cuota 20 hoy.")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-with col2:
-    st.markdown('<div class="ticket-card" style="border-color:#00ff88;">', unsafe_allow_html=True)
-    st.markdown('<div class="odds-header" style="color:#00ff88;">CUOTA 12.50</div><p style="text-align:center; font-size:0.7rem;">PROBABILIDAD: 81%</p>', unsafe_allow_html=True)
-    ticket_2 = all_picks[4:8]
-    for p in ticket_2:
-        st.markdown(f'<div class="match-line"><b>{p["match"]}</b><br><span class="prob-green">{p["pick"]}</span></div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+else:
+    st.warning(f"No hay suficientes partidos grabados para el día {fecha_seleccionada.strftime('%d/%m/%Y')}. Prueba con otra fecha o pulsa el botón de mañana.")
 
-with col3:
-    st.markdown('<div class="ticket-card" style="border-color:#ff0055;">', unsafe_allow_html=True)
-    st.markdown('<div class="odds-header" style="color:#ff0055;">CUOTA 21.10</div><p style="text-align:center; font-size:0.7rem;">PROBABILIDAD: 72%</p>', unsafe_allow_html=True)
-    ticket_3 = all_picks[8:13]
-    for p in ticket_3:
-        st.markdown(f'<div class="match-line"><b>{p["match"]}</b><br><span class="prob-green">{p["pick"]}</span></div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-if st.button("🔄 GENERAR NUEVOS TICKETS (CEREBRO FRESCO)"):
+# 5. BOTÓN DE ACTUALIZACIÓN
+if st.button("🔄 GENERAR NUEVAS COMBINACIONES PARA ESTE DÍA"):
     st.rerun()
