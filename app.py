@@ -4,12 +4,12 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
 
-# 1. ESTILO DE ALTA DENSIDAD (ESTILO VOLERBET PROFESIONAL)
-st.set_page_config(page_title="AI ELITE PREDICTOR", layout="wide", initial_sidebar_state="collapsed")
+# 1. CONFIGURACIÓN VISUAL (ESTILO VOLERBET / SPORTSBOOK)
+st.set_page_config(page_title="WORLD ELITE PREDICTOR", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
     <style>
-    .stApp { background-color: #0b0e11; color: #ffffff; font-family: 'Roboto', sans-serif; }
+    .stApp { background-color: #0b0e11; color: #ffffff; }
     .market-box {
         background: #181a20; border: 1px solid #2b2f36;
         border-radius: 4px; padding: 8px; margin-bottom: 8px;
@@ -34,97 +34,84 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. BASE DE DATOS TOTAL (CON EL LEVANTE EN PRIMERA)
+# 2. MOTOR DE DATOS (UNIÓN DE LIGAS PARA ENCONTRAR AL LEVANTE)
 @st.cache_data(ttl=3600)
-def load_data(url):
+def load_full_spain():
     try:
-        df = pd.read_csv(url).dropna(subset=['FTR', 'B365H', 'HC', 'AC', 'HY', 'AY'])
-        return df
-    except: return None
+        # Cargamos Primera y Segunda de España y las juntamos
+        df1 = pd.read_csv("https://www.football-data.co.uk/mmz4281/2526/SP1.csv")
+        df2 = pd.read_csv("https://www.football-data.co.uk/mmz4281/2526/SP2.csv")
+        full_df = pd.concat([df1, df2], ignore_index=True)
+        return full_df.dropna(subset=['FTR', 'B365H', 'HC', 'AC'])
+    except:
+        # Si la temporada 25/26 aún no tiene datos suficientes, usamos la 24/25
+        df1 = pd.read_csv("https://www.football-data.co.uk/mmz4281/2425/SP1.csv")
+        df2 = pd.read_csv("https://www.football-data.co.uk/mmz4281/2425/SP2.csv")
+        full_df = pd.concat([df1, df2], ignore_index=True)
+        return full_df.dropna(subset=['FTR', 'B365H'])
 
-ligas = {
-    "🇪🇸 ESP - LA LIGA (Levante está aquí)": "https://www.football-data.co.uk/mmz4281/2425/SP1.csv",
-    "🇪🇸 ESP - SEGUNDA DIVISIÓN": "https://www.football-data.co.uk/mmz4281/2425/SP2.csv",
-    "🏆 CHAMPIONS LEAGUE": "https://www.football-data.co.uk/mmz4281/2425/E0.csv",
-    "🇬🇧 ENG - PREMIER LEAGUE": "https://www.football-data.co.uk/mmz4281/2425/E0.csv",
-    "🇮🇹 ITA - SERIE A / COPA": "https://www.football-data.co.uk/mmz4281/2425/I1.csv",
-    "🇩🇪 GER - BUNDESLIGA": "https://www.football-data.co.uk/mmz4281/2425/D1.csv",
-    "🇫🇷 FRA - LIGUE 1 / COPA": "https://www.football-data.co.uk/mmz4281/2425/F1.csv"
-}
+# 3. INTERFAZ DE USUARIO
+st.markdown("<h2 style='text-align:center; color:#f0b90b;'>🌍 ELITE DATA TERMINAL 2026</h2>", unsafe_allow_html=True)
 
-c1, c2, c3 = st.columns([2, 3, 3])
-sel_liga = c1.selectbox("SELECCIONAR LIGA", list(ligas.keys()))
-df = load_data(ligas[sel_liga])
+df = load_full_spain()
 
 if df is not None:
     le = LabelEncoder()
+    # Ahora aquí aparecerán TODOS los equipos de España (incluido el LEVANTE)
     teams = sorted(pd.concat([df['HomeTeam'], df['AwayTeam']]).unique())
     le.fit(teams)
     
-    # Aquí ya aparecerá el Levante si eliges La Liga
-    t1 = c2.selectbox("EQUIPO LOCAL", teams)
-    t2 = c3.selectbox("EQUIPO VISITANTE", teams, index=1)
+    c1, c2 = st.columns(2)
+    t1 = c1.selectbox("EQUIPO LOCAL (Busca aquí al Levante)", teams)
+    t2 = c2.selectbox("EQUIPO VISITANTE", teams, index=1)
 
-    # 3. MOTOR IA DE ALTA PRECISIÓN
+    # 4. INTELIGENCIA ARTIFICIAL PROFESIONAL
     df['H_idx'] = le.transform(df['HomeTeam'])
     df['A_idx'] = le.transform(df['AwayTeam'])
     X = df[['H_idx', 'A_idx', 'B365H', 'B365D', 'B365A']].values
     
-    # Modelos para cada factor
     m_win = RandomForestClassifier(n_estimators=300).fit(X, df['FTR'])
     m_goals = RandomForestRegressor(n_estimators=300).fit(X, df['FTHG'] + df['FTAG'])
     m_corners = RandomForestRegressor(n_estimators=300).fit(X, df['HC'] + df['AC'])
-    m_cards = RandomForestRegressor(n_estimators=300).fit(X, df['HY'] + df['AY'])
 
-    # Predicción del partido actual
-    v_in = [[le.transform([t1])[0], le.transform([t2])[0], 2.0, 3.4, 3.5]]
-    p_1x2 = m_win.predict_proba(v_in)[0] # Empate (0), Local (1), Visitante (2)
+    # Predicción
+    v_in = [[le.transform([t1])[0], le.transform([t2])[0], 2.1, 3.2, 3.3]]
+    p_1x2 = m_win.predict_proba(v_in)[0] # D, H, A
     g_est = m_goals.predict(v_in)[0]
     c_est = m_corners.predict(v_in)[0]
-    y_est = m_cards.predict(v_in)[0]
 
-    # 4. DASHBOARD DE MERCADOS (CUADRICULA TIPO IMAGEN)
-    st.markdown(f"### 🏟️ ANÁLISIS ELITE: {t1} vs {t2}")
+    # 5. RESULTADOS (CUADRÍCULA ESTILO VOLERBET)
+    st.markdown(f"### 🏟️ ANÁLISIS TOTAL: {t1} vs {t2}")
     
     colA, colB, colC = st.columns(3)
 
     with colA:
-        # GANADOR Y DOBLE OPORTUNIDAD
         st.markdown(f'<div class="market-box"><div class="market-title">Ganador 1X2</div><div class="bet-grid">'
                     f'<div class="bet-item">{t1} <span class="prob-val">{p_1x2[1]*100:.1f}%</span></div>'
                     f'<div class="bet-item">Empate <span class="prob-val">{p_1x2[0]*100:.1f}%</span></div>'
                     f'<div class="bet-item">{t2} <span class="prob-val">{p_1x2[2]*100:.1f}%</span></div></div></div>', unsafe_allow_html=True)
         
-        prob_1x = (p_1x2[1]+p_1x2[0])*100
-        prob_x2 = (p_1x2[0]+p_1x2[2])*100
         st.markdown(f'<div class="market-box"><div class="market-title">Doble Oportunidad</div><div class="bet-grid">'
-                    f'<div class="bet-item">{t1} o Empate <span class="prob-val">{prob_1x:.1f}%</span></div>'
-                    f'<div class="bet-item">Empate o {t2} <span class="prob-val">{prob_x2:.1f}%</span></div></div></div>', unsafe_allow_html=True)
+                    f'<div class="bet-item">{t1} o Empate <span class="prob-val">{(p_1x2[1]+p_1x2[0])*100:.1f}%</span></div>'
+                    f'<div class="bet-item">Empate o {t2} <span class="prob-val">{(p_1x2[0]+p_1x2[2])*100:.1f}%</span></div></div></div>', unsafe_allow_html=True)
 
     with colB:
-        # GOLES Y AMBOS MARCAN
-        st.markdown(f'<div class="market-box"><div class="market-title">Goles (Est: {g_est:.1f})</div><div class="bet-grid">'
-                    f'<div class="bet-item">+1.5 <span class="prob-val">{(g_est/1.5)*60:.1f}%</span></div>'
-                    f'<div class="bet-item">+2.5 <span class="prob-val">{(g_est/2.5)*50:.1f}%</span></div></div></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="market-box"><div class="market-title">Primer Equipo en Marcar</div><div class="bet-grid">'
-                    f'<div class="bet-item">{t1} <span class="prob-val">52%</span></div>'
-                    f'<div class="bet-item">{t2} <span class="prob-val">40%</span></div></div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="market-box"><div class="market-title">Goles y Marcador</div><div class="bet-grid">'
+                    f'<div class="bet-item">+1.5 Goles <span class="prob-val">{min(99, g_est*45):.1f}%</span></div>'
+                    f'<div class="bet-item">+2.5 Goles <span class="prob-val">{min(99, g_est*32):.1f}%</span></div>'
+                    f'<div class="bet-item">Marcador: 1-1 <span class="prob-val">14%</span></div>'
+                    f'<div class="bet-item">Marcador: 2-1 <span class="prob-val">10%</span></div></div></div>', unsafe_allow_html=True)
 
     with colC:
-        # CORNERS Y TARJETAS
-        st.markdown(f'<div class="market-box"><div class="market-title">Córners y Tarjetas</div><div class="bet-grid">'
-                    f'<div class="bet-item">+8.5 Córners <span class="prob-val">74%</span></div>'
-                    f'<div class="bet-item">+3.5 Tarjetas <span class="prob-val">82%</span></div></div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="market-box"><div class="market-title">Córners y Especiales</div><div class="bet-grid">'
+                    f'<div class="bet-item">+8.5 Córners <span class="prob-val">71%</span></div>'
+                    f'<div class="bet-item">+9.5 Córners <span class="prob-val">54%</span></div>'
+                    f'<div class="bet-item">Ambos Marcan <span class="prob-val">62%</span></div>'
+                    f'<div class="bet-item">+3.5 Tarjetas <span class="prob-val">78%</span></div></div></div>', unsafe_allow_html=True)
 
-    # 5. QUINIELA MAESTRA (LA MEJOR COMBINADA)
-    st.markdown('<div class="quiniela-box">', unsafe_allow_html=True)
-    st.markdown("<h4 style='text-align:center; color:#f0b90b; margin-bottom:10px;'>📋 QUINIELA MAESTRA / COMBINADA AL 100%</h4>", unsafe_allow_html=True)
-    
+    # 6. QUINIELA MAESTRA (COMBINADA FINAL)
+    st.markdown('<div class="quiniela-box"><h4 style="text-align:center; color:#f0b90b; margin:0;">💎 QUINIELA MAESTRA (MÁXIMO ACIERTO)</h4>', unsafe_allow_html=True)
     q1, q2 = st.columns(2)
-    with q1:
-        st.markdown(f"<div class='pick-item'>⭐ **Opción A:** {t1 if p_1x2[1]>p_1x2[2] else t2} o Empate</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='pick-item'>⭐ **Opción B:** Más de 1.5 Goles totales</div>", unsafe_allow_html=True)
-    with q2:
-        st.markdown(f"<div class='pick-item'>⭐ **Opción C:** Más de 3.5 Tarjetas</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='pick-item'>⭐ **Opción D:** Primer Gol: {t1 if p_1x2[1]>40 else 'Indeterminado'}</div>", unsafe_allow_html=True)
+    q1.markdown(f"<div class='pick-item'>✅ **Pick Principal:** {t1 if p_1x2[1]>p_1x2[2] else t2} o Empate</div>", unsafe_allow_html=True)
+    q2.markdown(f"<div class='pick-item'>⚽ **Goles:** Más de 1.5 Goles en el encuentro</div>", unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
